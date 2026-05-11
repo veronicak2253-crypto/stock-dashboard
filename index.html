@@ -95,7 +95,7 @@ body {
 /* 요약 카드 */
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
   margin-bottom: 20px;
 }
@@ -187,7 +187,7 @@ body {
 .gm.hit { color: var(--gold); }
 
 /* 계좌 섹션 */
-.acct-section { margin-bottom: 20px; }
+.acct-section { margin-bottom: 0; }
 .acct-header {
   display: flex;
   justify-content: space-between;
@@ -392,6 +392,17 @@ body {
 }
 .chart-wrap { position: relative; width: 100%; height: 180px; }
 
+/* 계좌 좌우 분할 */
+.accts-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 0;
+}
+@media(max-width: 900px) {
+  .accts-split { grid-template-columns: 1fr; }
+}
+
 /* 마지막 업데이트 */
 .last-update {
   text-align: center;
@@ -432,8 +443,7 @@ body {
   </div>
 </div>
 
-<div id="acctA"></div>
-<div id="acctB"></div>
+<div class="accts-split"><div id="acctA"></div><div id="acctB"></div></div>
 
 <div class="bottom-row">
   <div>
@@ -494,27 +504,33 @@ let portfolio = {
   ]
 };
 
-// localStorage에서 불러오기
+// localStorage에서 불러오기 (v2 — 기존 잘못된 데이터 자동 초기화)
 function loadFromStorage() {
-  const saved = localStorage.getItem('portfolio_v1');
+  // 구버전 데이터 강제 삭제
+  localStorage.removeItem('portfolio_v3_old');
+  const saved = localStorage.getItem('portfolio_v3');
   if (saved) {
-    const parsed = JSON.parse(saved);
-    portfolio.cash = parsed.cash ?? portfolio.cash;
-    portfolio.lastUpdate = parsed.lastUpdate ?? null;
-    parsed.stocks?.forEach((s, i) => {
-      if (portfolio.stocks[i]) portfolio.stocks[i].cur = s.cur;
-    });
-    if (parsed.cash !== undefined) portfolio.cash = parsed.cash;
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed.cash !== undefined) portfolio.cash = parsed.cash;
+      if (parsed.lastUpdate) portfolio.lastUpdate = parsed.lastUpdate;
+      parsed.stocks?.forEach((s, i) => {
+        if (portfolio.stocks[i] && s.cur > 0) portfolio.stocks[i].cur = s.cur;
+      });
+    } catch(e) {
+      localStorage.removeItem('portfolio_v3');
+    }
   }
 }
 
 function saveToStorage() {
-  localStorage.setItem('portfolio_v1', JSON.stringify({
+  localStorage.setItem('portfolio_v3', JSON.stringify({
     cash: portfolio.cash,
     lastUpdate: portfolio.lastUpdate,
     stocks: portfolio.stocks.map(s => ({ cur: s.cur }))
   }));
 }
+
 
 // 계산
 function calc() {
@@ -529,8 +545,8 @@ function calc() {
 function fmt(n) { return Math.round(n).toLocaleString('ko-KR'); }
 function fmtW(n) {
   const a = Math.abs(n);
-  if (a >= 100000000) return (n/100000000).toFixed(2) + '억';
-  if (a >= 10000000)  return (n/10000000).toFixed(1) + '억';
+  if (a >= 100000000) return (n/100000000).toFixed(1) + '억';
+  if (a >= 10000000)  return (n/10000000).toFixed(1) + '천만';
   if (a >= 10000)     return Math.round(n/10000) + '만';
   return fmt(n);
 }
@@ -571,6 +587,7 @@ function render() {
       scls: totalPnl>=0?'pos':'neg' },
     { label:'목표까지', value: fmtW(portfolio.goal-asset)+'원',
       sub: (100-gPct).toFixed(1)+'% 남음', cls:'goal', scls:'neu' },
+    { label:'예수금', value: fmtW(portfolio.cash)+'원', sub:'잔여 현금', cls:'', scls:'neu' },
   ].forEach(c => {
     sg.innerHTML += `<div class="scard ${c.cls}">
       <div class="scard-label">${c.label}</div>
